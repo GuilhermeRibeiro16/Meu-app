@@ -2,10 +2,11 @@ import React from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity } from 'react-native';
 
 const users = [
-  { id: '1', name: 'Wesley Gomes', avatar: 'https://via.placeholder.com/50' },
+  { id: '1', name: 'Wesley Gomes', imageUrl: require ('./assets/wesley.png') },
   { id: '2', name: 'Janderson Souza', avatar: 'https://via.placeholder.com/50' },
   { id: '3', name: 'Gustavo Ferreira', avatar: 'https://via.placeholder.com/50' },
 ];
+
 
 const ChatList = ({ navigation }) => {
   return (

@@ -13,6 +13,7 @@ export default function FeedScreen({ navigation }) {
     Anime: [
       { id: '1', title: 'Desenho de Naruto', imageUrl: require('./assets/Naruto.jpg') },
       { id: '2', title: 'Desenho de Goku', imageUrl: require('./assets/Goku.jpg') },
+      { id: '11', title: 'Desenho de ash', imageUrl: require('./assets/Ash1.jpg') },
     ],
     Animais: [
       { id: '3', title: 'Desenho de Leão', imageUrl: require('./assets/Leão.jpg') },

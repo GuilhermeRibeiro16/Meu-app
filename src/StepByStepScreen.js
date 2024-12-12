@@ -9,6 +9,7 @@ export default function StepByStepScreen({ route, navigation }) {
     { id: 1, description: 'Comece a desenhar o chapéu e o cabelo.', image: require('./assets/step1.jpg') },
     { id: 2, description: 'Adicione os olhos e os detalhes.', image: require('./assets/step2.jpg') },
     { id: 3, description: 'Finalize os traços e contornos.', image: require('./assets/step3.jpg') },
+    { id: 4, description: 'Finalize os traços e contornos.', image: require('./assets/step4.jpg') },
   ];
 
   const handleNext = () => {

@@ -7,54 +7,110 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  TextInput,
 } from 'react-native';
 import { signOut } from 'firebase/auth';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db, auth } from './firebase.config';
+import { auth } from './firebase.config';
+import * as FileSystem from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
+
+const PROFILE_PATH = FileSystem.documentDirectory + 'profileData.json';
 
 export default function ProfileScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [followers, setFollowers] = useState(0);
   const [following, setFollowing] = useState(0);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [description, setDescription] = useState('');
 
   // Carregar dados do usuário
   const loadUserData = async () => {
     try {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUser({
-            name: data.name,
-            photoUrl: data.photoUrl,
-          });
-          setFollowers(data.followers || 0);
-          setFollowing(data.following || 0);
-        }
+      const fileExists = await FileSystem.getInfoAsync(PROFILE_PATH);
+      if (fileExists.exists) {
+        const fileData = await FileSystem.readAsStringAsync(PROFILE_PATH);
+        const parsedData = JSON.parse(fileData);
+        setUser({
+          name: parsedData.name,
+          photoUrl: parsedData.photoUrl,
+        });
+        setFollowers(parsedData.followers || 0);
+        setFollowing(parsedData.following || 0);
+      } else {
+        setUser({ name: 'Guilherme', photoUrl: null });
       }
     } catch (error) {
       console.error('Erro ao carregar dados do usuário:', error);
     }
   };
-
   // Carregar publicações do usuário
   const loadPosts = async () => {
     try {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const postsQuery = await getDocs(
-          collection(db, 'users', currentUser.uid, 'posts')
-        );
-        const postsData = postsQuery.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setPosts(postsData);
+      const postsFile = FileSystem.documentDirectory + 'posts.json';
+      const fileExists = await FileSystem.getInfoAsync(postsFile);
+      if (fileExists.exists) {
+        const postsData = await FileSystem.readAsStringAsync(postsFile);
+        setPosts(JSON.parse(postsData));
+      } else {
+        setPosts([]);
       }
     } catch (error) {
       console.error('Erro ao carregar publicações:', error);
+    }
+  };
+
+  const pickImage = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      alert('Permissão para acessar a galeria é necessária!');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setSelectedImage(uri);
+    }
+  };
+  // Função para salvar a imagem no sistema de arquivos
+  const uploadImage = async () => {
+    if (!selectedImage || !description) {
+      alert('Por favor, selecione uma imagem e adicione uma descrição.');
+      return;
+    }
+    try {
+      const newPost = {
+        image: selectedImage,
+        description: description,
+        user: auth.currentUser?.email || 'Usuário Anônimo',
+        timestamp: new Date(),
+      };
+
+      // Salvar o post no sistema de arquivos
+      const postsFile = FileSystem.documentDirectory + 'posts.json';
+      const fileExists = await FileSystem.getInfoAsync(postsFile);
+      let postsData = [];
+      if (fileExists.exists) {
+        const existingData = await FileSystem.readAsStringAsync(postsFile);
+        postsData = JSON.parse(existingData);
+      }
+
+      postsData.push(newPost);
+      await FileSystem.writeAsStringAsync(postsFile, JSON.stringify(postsData));
+
+      alert('Imagem enviada com sucesso!');
+      setSelectedImage(null);
+      setDescription('');
+      loadPosts();
+    } catch (error) {
+      console.error('Erro ao enviar a imagem:', error);
+      alert('Falha ao enviar a imagem.');
     }
   };
 
@@ -65,7 +121,7 @@ export default function ProfileScreen({ navigation }) {
       navigation.replace('Login'); // Redireciona para a tela de login
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
-      Alert.alert('Erro', 'Não foi possível sair da conta.');
+      Alert.alert('Logout', 'Você saiu da conta.');
     }
   };
 
@@ -76,8 +132,8 @@ export default function ProfileScreen({ navigation }) {
 
   const renderPost = ({ item }) => (
     <View style={styles.postContainer}>
-      <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
-      <Text>{item.title}</Text>
+        <Image source={{ uri: item.image }} style={styles.postImage} />
+      <Text>{item.description}</Text>
       <View style={styles.postActions}>
         <TouchableOpacity>
           <Text>Curtir</Text>
@@ -94,7 +150,6 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Cabeçalho do Perfil */}
       <View style={styles.header}>
         {user?.photoUrl ? (
           <Image source={{ uri: user.photoUrl }} style={styles.profilePhoto} />
@@ -131,6 +186,26 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Botão para escolher a imagem */}
+      <TouchableOpacity onPress={pickImage} style={styles.uploadButton}>
+        <Text style={styles.uploadButtonText}> Publicar Desenho</Text>
+      </TouchableOpacity>
+
+      {/* Input para a descrição */}
+      {selectedImage && (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Descrição da imagem"
+            value={description}
+            onChangeText={setDescription}
+          />
+          <TouchableOpacity onPress={uploadImage} style={styles.uploadButton}>
+            <Text style={styles.uploadButtonText}>Publicar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Publicações */}
       <FlatList
         data={posts}
@@ -143,23 +218,47 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { alignItems: 'center', padding: 20, backgroundColor: '#f8f8f8' },
-  profilePhoto: { width: 100, height: 100, borderRadius: 50 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#fff' 
+  },
+  header: { 
+    alignItems: 'center', 
+    padding: 20, 
+    backgroundColor: '#f8f8f8' 
+  },
+  profilePhoto: { 
+    width: 100, 
+    height: 100, 
+    borderRadius: 50 
+  },
   placeholderPhoto: {
     width: 100,
     height: 100,
     borderRadius: 50,
     backgroundColor: '#ddd',
   },
-  userName: { fontSize: 20, fontWeight: 'bold', marginVertical: 10 },
-  stats: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-  stat: { alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: 'bold' },
+  userName: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    marginVertical: 10 
+  },
+  stats: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    width: '100%' 
+  },
+  stat: { 
+    alignItems: 'center' 
+  },
+  statValue: { 
+    fontSize: 18, 
+    fontWeight: 'bold' 
+  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 10,
+    paddingVertical: 15,
   },
   actionButton: {
     padding: 10,
@@ -171,8 +270,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#f88',
     borderRadius: 5,
   },
-  postsList: { padding: 10 },
-  postContainer: { marginBottom: 20 },
-  postImage: { width: '100%', height: 200, borderRadius: 10 },
-  postActions: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 10 },
+  postsList: { 
+    flex: 1, // Ajusta o FlatList para ocupar o espaço restante acima do rodapé
+    padding: 10 
+  },
+  postContainer: { 
+    marginBottom: 20 
+  },
+  postImage: { 
+    width: '100%', 
+    height: 200, 
+    borderRadius: 10 
+  },
+  postActions: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    marginTop: 10 
+  },
+  uploadButton: { 
+    padding: 15, 
+    backgroundColor: '#4CAF50', 
+    alignItems: 'center', 
+  },
+  uploadButtonText: { 
+    color: '#fff', 
+    fontSize: 18 
+  },
+  inputContainer: { 
+    padding: 10 
+  },
+  input: {
+    height: 40,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#ccc',
+    alignItems: 'center',
+  },
 });
